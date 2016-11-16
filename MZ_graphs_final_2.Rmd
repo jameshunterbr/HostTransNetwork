@@ -1,0 +1,255 @@
+---
+title: "Zanoni Graphs"
+author: "James R. Hunter"
+date: "September 12, 2016"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Modules
+```{r packages}
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(readr))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(RColorBrewer))
+suppressPackageStartupMessages(library(DescTools))
+suppressPackageStartupMessages(library(ggbeeswarm))
+```
+
+## Load Data
+```{r loaddata}
+#, eval = FALSE}
+mzdata <- read_csv("fc_final.csv")
+# Correct gene names
+mzdata$Symbol[mzdata$Symbol == "ELANE"] <- "ELA2"
+mzdata$Symbol[mzdata$Symbol == "SERPINC1"] <- "ATIII"
+mzdata$Symbol[mzdata$Symbol == "TNFSF10"] <- "TRAIL"
+mzdata$Symbol[mzdata$Symbol == "TNFRSF1B"] <- "TNFR2"
+# Re-save mzdata with corrections
+save(mzdata, file = "mzdata.RData")
+```
+
+```{r loadcorrecteddata}
+load("mzdata.RData")
+kable(mzdata, caption = "Graph Data - Gene Expression")
+```
+
+## Difference in Expression between Elite Controllers (EC) and Rapid Progressors (RP)
+
+```{r ecrp}
+# Calculate difference using both recent and 12 month data
+# Use absolute value of differences since direction doesn't count
+mzdata <- mzdata %>% mutate(diffecrpri = abs(RPRI - ECRI)) %>%
+                     mutate(diffecrp12 = abs(RP12 - EC12))
+# Create frame with 20 largest differences for each period
+# These need to be long data frames for the graphs
+ecrpri <- top_n(mzdata, 20, diffecrpri) %>%
+          select(Position, Symbol, ECRI, RPRI, diffecrpri) %>%
+          gather(key = gr, value = exp, 3:4)
+ecrp12 <- top_n(mzdata, 20, diffecrp12) %>%
+          select(Position, Symbol, EC12, RP12, diffecrp12) %>%
+          gather(key = gr, value = exp, 3:4)
+```
+```{r gr1}
+# make bar graph showing difference for these twenty genes
+# use data from 12 months
+ecrp12gr <- ggplot(data = ecrp12, aes(x = Symbol, y = exp, fill = gr))
+ecrp12gr <- ecrp12gr + scale_fill_brewer(palette = "Set1")
+ecrp12gr <- ecrp12gr + geom_bar(stat = "identity", position = "dodge")
+ecrp12gr <- ecrp12gr + xlab("20 Genes with Greatest Difference") + ylab("Expression")
+ecrp12gr <- ecrp12gr + ggtitle("Difference in Expression between\nElite Controllers and Rapid Progressors - 12 months")
+ecrp12gr <- ecrp12gr + labs(fill = "Group")
+ecrp12gr <- ecrp12gr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+ecrp12gr
+```
+### Do the same for Recent Infection
+
+```{r gr2}
+# make bar graph showing difference for these twenty genes
+# use data from 12 months
+ecrprigr <- ggplot(data = ecrpri, aes(x = Symbol, y = exp, fill = gr))
+ecrprigr <- ecrprigr + scale_fill_brewer(palette = "Set1")
+ecrprigr <- ecrprigr + geom_bar(stat = "identity", position = "dodge")
+ecrprigr <- ecrprigr + xlab("20 Genes with Greatest Difference") + ylab("Expression")
+ecrprigr <- ecrprigr + ggtitle("Difference in Expression between\nElite Controllers and Rapid Progressors - Recent Infection")
+ecrprigr <- ecrprigr + labs(fill = "Group")
+ecrprigr <- ecrprigr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+ecrprigr
+```
+
+## Are the groups significantly different?
+
+```{r ecrpdiff}
+# make long version of ecrp for difference tests
+ecrp_long <- mzdata %>% 
+             select(Symbol, ECRI, EC12, RPRI, RP12) %>% 
+             gather(key = gr, value = expr, 2:5) %>%
+             mutate(term = substr(gr, 3, 4))
+## 12 months
+df <- ecrp_long %>% filter(term == "12")
+(tt12 <- t.test(expr ~ gr, data = df))
+## Recent Infection
+df <- ecrp_long %>% filter(term == "RI")
+(ttri <- t.test(expr ~ gr, data = df))
+
+```
+### Are the periods significantly different?
+
+```{r ecrpterm}
+(ttterm <- t.test(expr ~ term, data = ecrp_long))
+
+```
+
+## Determine Genes that Are Significantly Different between EC and RP
+### Recent Infection
+### DeltaDeltaCT (2^-DDCT)
+
+```{r modecrpriddct}
+# read file from Excel
+ecrpriddct <- read_csv("ecrpriddct.csv")
+genes <- ecrpriddct$Symbol
+patients <- colnames(ecrpriddct[2:11])
+
+# set up data frame of t-tests
+ttdf <- data_frame(Symbol = genes, tstat = 0.0, pval = 0.0, lowerci = 0.0,
+                   upperci = 0.0, sd1 = 0.0, sd2 = 0.0)
+
+# transform matrix to put genes as variables and patients as observations
+x <- as_data_frame(t(as.matrix(ecrpriddct[,2:11])))
+colnames(x) <- genes
+
+# set up to loop t-tests over genes
+for (i in 1:length(genes)) {
+  # set up data frame for this gene from transformed matrix
+  # columns 1:5 are group 1 and cols 6:10 are group 2
+  # get group 1 data
+  ec <- x %>% slice(1:5) %>% select(i)
+  ec <- unlist(ec)
+  
+  # get group 2 data
+  rp <- x %>% slice(6:10) %>% select(i)
+  rp <- unlist(rp)
+  
+  # Calculate standard deviations for both groups and place in data frame
+  ttdf$sd1[i] <- sd(ec, na.rm = TRUE)
+  ttdf$sd2[i] <- sd(rp, na.rm = TRUE)
+  
+  # run t.test and load values in data frame
+  xt <- t.test(ec, rp)
+  ttdf$tstat[i] <- xt$statistic
+  ttdf$pval[i] <- xt$p.value
+  ttdf$lowerci[i] <- xt$conf.int[1]
+  ttdf$upperci[i] <- xt$conf.int[2]
+}
+
+```
+
+## Identify genes that are statistically significant
+
+```{r modsiggenes}
+siggenes <- ttdf %>% 
+            filter(pval < 0.05) %>%
+            arrange(pval)
+kable(siggenes, caption = "Statistics to Determine Significant Genes")
+# Create data frame with expression data for these significant genes
+genessig <- siggenes$Symbol
+ecrprisig <- mzdata %>% filter(Symbol %in% genessig) %>%
+             select(Position, Symbol, ECRI, RPRI, diffecrpri) %>%
+             gather(key = gr, value = exp, 3:4)
+```
+```{r gr3}
+# make bar graph showing difference for these significant genes 
+ecrprisiggr <- ggplot(data = ecrprisig, aes(x = Symbol, y = exp, fill = gr))
+ecrprisiggr <- ecrprisiggr + scale_fill_brewer(palette = "Set1")
+ecrprisiggr <- ecrprisiggr + geom_bar(stat = "identity", position = "dodge")
+ecrprisiggr <- ecrprisiggr + xlab("Genes with Signficant Difference in Groups (p < 0.05)") + ylab("Fold Change")
+ecrprisiggr <- ecrprisiggr + ggtitle("Difference in Expression between\nElite Controllers and Rapid Progressors - Recent Infection")
+ecrprisiggr <- ecrprisiggr + labs(fill = "Group")
+ecrprisiggr <- ecrprisiggr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+ecrprisiggr
+```
+
+### Make graph into a function
+
+```{r grfunc}
+diffgraph <- function(data, titlel2) {
+  title <- paste0("Difference in Expression between\n", titlel2)
+  ecrpgr <- ggplot(data = data, aes(x = Symbol, y = exp, fill = gr))
+  ecrpgr <- ecrpgr + scale_fill_brewer(palette = "Set1")
+  ecrpgr <- ecrpgr + geom_bar(stat = "identity", position = "dodge")
+  ecrpgr <- ecrpgr + xlab("Genes with Signficant Difference in Groups (p < 0.05)") 
+  ecrpgr <- ecrpgr + ylab("Fold Change")
+  ecrpgr <- ecrpgr + ggtitle(title)
+  ecrpgr <- ecrpgr + labs(fill = "Group")
+  ecrpgr <- ecrpgr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+  ecrpgr
+
+}
+diffgraph(ecrprisig, "Elite Controllers and Rapid Progressors - Recent Infection")
+```
+
+## Determine Genes that Are Significantly Different between EC and RP
+### 12 Months
+### DeltaDeltaCT (2^-DDCT)
+
+```{r modecrp12ddct}
+# read file from Excel
+ecrp12ddct <- read_csv("ecrp12ddct.csv")
+genes <- ecrp12ddct$Symbol
+patients <- colnames(ecrp12ddct[2:11])
+
+# set up data frame of t-tests
+tt12df <- data_frame(Symbol = genes, tstat = 0.0, pval = 0.0, lowerci = 0.0,
+                   upperci = 0.0, sd1 = 0.0, sd2 = 0.0)
+
+# transform matrix to put genes as variables and patients as observations
+x <- as_data_frame(t(as.matrix(ecrp12ddct[,2:11])))
+colnames(x) <- genes
+
+# set up to loop t-tests over genes
+for (i in 1:length(genes)) {
+  # set up data frame for this gene from transformed matrix
+  # columns 1:5 are group 1 and cols 6:10 are group 2
+  # get group 1 data
+  ec <- x %>% slice(1:5) %>% select(i)
+  ec <- unlist(ec)
+  
+  # get group 2 data
+  rp <- x %>% slice(6:10) %>% select(i)
+  rp <- unlist(rp)
+  
+  # Calculate standard deviations for both groups and place in data frame
+  tt12df$sd1[i] <- sd(ec, na.rm = TRUE)
+  tt12df$sd2[i] <- sd(rp, na.rm = TRUE)
+  
+  # run t.test and load values in data frame
+  xt <- t.test(ec, rp)
+  tt12df$tstat[i] <- xt$statistic
+  tt12df$pval[i] <- xt$p.value
+  tt12df$lowerci[i] <- xt$conf.int[1]
+  tt12df$upperci[i] <- xt$conf.int[2]
+}
+
+```
+
+```{r modsiggenes12}
+siggenes12 <- tt12df %>% 
+            filter(pval < 0.05) %>%
+            arrange(pval)
+kable(siggenes12)
+# Create data frame with expression data for these significant genes
+genessig12 <- siggenes12$Symbol
+ecrp12sig <- mzdata %>% filter(Symbol %in% genessig12) %>%
+             select(Position, Symbol, ECRI, RPRI, diffecrpri) %>%
+             gather(key = gr, value = exp, 3:4)
+diffgraph(ecrp12sig, "Elite Controllers and Rapid Progressors - 12 months")
+```

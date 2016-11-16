@@ -1,0 +1,315 @@
+---
+title: "MZ 8 Group/Time Graphs"
+author: "James R. Hunter"
+date: "September 12, 2016"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Modules
+```{r packages}
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(readr))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(RColorBrewer))
+suppressPackageStartupMessages(library(DescTools))
+
+```
+
+# Load Corrected Data
+```{r loaddata}
+load("mzdata.RData")
+
+```
+
+## Set up data frames for the groups
+```{r setupframes}
+master <- data_frame(sym = character(), 
+                     group = character(), 
+                     time = character(), 
+                     avg = double(), 
+                     sd = double(), 
+                     sem = double())
+# Genes for group graphs
+ecriGenes <- c("CASP8", "ATIII", "CCL2", "XCL1", "TNF", "IL10", "TSG101", "CDKN1A")
+
+# ECRI
+# Use ecrpriddct as base for ecri data
+ecrpri <- read_csv("ecrpriddct.csv")
+# Change Symbol names to reflect changes from MZ; get from mzdata
+ecrpri$Symbol <- mzdata$Symbol
+ecri <- ecrpri %>% select(1:6) %>% filter(Symbol %in% ecriGenes) 
+for (i in 1:nrow(ecri)) {
+  x <- data_frame(sym = "", group = "", time = "", avg = 0.0, sd = 0.0, sem = 0.0)
+  x$sym <- ecri$Symbol[i]
+  x$group <- "ec"
+  x$time <- "ri"
+  x$avg <- mean(as.numeric(ecri[i,2:6]), na.rm = T)
+  x$sd <- sd(ecri[i,2:6], na.rm = T)
+  x$sem <- x$sd/sqrt(5)
+  master <- rbind(master,x)
+}
+
+# RPRI
+rpriGenes <- c("CASP3", "CASP8", "CXCL12", "IFNA1", "IFNG")
+rpri <- ecrpri %>% select(c(1,7:11)) %>% filter(Symbol %in% rpriGenes) 
+for (i in 1:nrow(rpri)) {
+  x <- data_frame(sym = "", group = "", time = "", avg = 0.0, sd = 0.0, sem = 0.0)
+  x$sym <- rpri$Symbol[i]
+  x$group <- "rp"
+  x$time <- "ri"
+  x$avg <- mean(as.numeric(rpri[i,2:6]), na.rm = T)
+  x$sd <- sd(rpri[i,2:6], na.rm = T)
+  x$sem <- x$sd/sqrt(5)
+  master <- rbind(master,x)
+}
+
+# EC12
+ecrp12 <- read_csv("ecrp12ddct.csv")
+# Change Symbol names to reflect changes from MZ; get from mzdata
+ecrp12$Symbol <- mzdata$Symbol
+ec12Genes <- c("ATIII", "CCL8", "CXCL12", "STAT1", "FOS")
+ec12 <- ecrp12 %>% select(1:6) %>% filter(Symbol %in% ec12Genes) 
+for (i in 1:nrow(ec12)) {
+  x <- data_frame(sym = "", group = "", time = "", avg = 0.0, sd = 0.0, sem = 0.0)
+  x$sym <- ec12$Symbol[i]
+  x$group <- "ec"
+  x$time <- "12"
+  x$avg <- mean(as.numeric(ec12[i,2:6]), na.rm = T)
+  x$sd <- sd(ec12[i,2:6], na.rm = T)
+  x$sem <- x$sd/sqrt(5)
+  master <- rbind(master,x)
+}
+
+# RP12
+rp12Genes <- c("CASP3", "TRAIL", "TNFR2", "CXCL12", "STAT1", "CDKN1A", "CEBPB")
+rp12 <- ecrp12 %>% select(c(1,7:11)) %>% filter(Symbol %in% rp12Genes) 
+for (i in 1:nrow(rp12)) {
+  x <- data_frame(sym = "", group = "", time = "", avg = 0.0, sd = 0.0, sem = 0.0)
+  x$sym <- rp12$Symbol[i]
+  x$group <- "rp"
+  x$time <- "12"
+  x$avg <- mean(as.numeric(rp12[i,2:6]), na.rm = T)
+  x$sd <- sd(rp12[i,2:6], na.rm = T)
+  x$sem <- x$sd/sqrt(5)
+  master <- rbind(master,x)
+}
+
+#IRBT
+irbtGenes <- c("ELA2", "SLPI", "TNF", "STAT1", "CDKN1A", "RBL2", "FOS")
+
+irnrbt <- read_csv("irnrbtddct.csv")
+# Change Symbol names to reflect changes from MZ; get from mzdata
+irnrbt$Symbol <- mzdata$Symbol
+irbt <- irnrbt %>% select(1:6) %>% filter(Symbol %in% irbtGenes) 
+for (i in 1:nrow(irbt)) {
+  x <- data_frame(sym = "", group = "", time = "", avg = 0.0, sd = 0.0, sem = 0.0)
+  x$sym <- irbt$Symbol[i]
+  x$group <- "ir"
+  x$time <- "ri"
+  x$avg <- mean(as.numeric(irbt[i,2:6]), na.rm = T)
+  x$sd <- sd(irbt[i,2:6], na.rm = T)
+  x$sem <- x$sd/sqrt(5)
+  master <- rbind(master,x)
+}
+
+#NRBC
+nrbtGenes <- c("TNFR2", "CCL8", "IL10", "STAT1", "CEBPB")
+nrbt <- irnrbt %>% select(c(1,7:11)) %>% filter(Symbol %in% nrbtGenes) 
+for (i in 1:nrow(nrbt)) {
+  x <- data_frame(sym = "", group = "", time = "", avg = 0.0, sd = 0.0, sem = 0.0)
+  x$sym <- nrbt$Symbol[i]
+  x$group <- "nr"
+  x$time <- "ri"
+  x$avg <- mean(as.numeric(nrbt[i,2:6]), na.rm = T)
+  x$sd <- sd(nrbt[i,2:6], na.rm = T)
+  x$sem <- x$sd/sqrt(5)
+  master <- rbind(master,x)
+}
+
+#IR12
+ir12Genes <- c("STAT1", "FOS")
+
+irnr12 <- read_csv("irnr12ddct.csv")
+# Change Symbol names to reflect changes from MZ; get from mzdata
+irnr12$Symbol <- mzdata$Symbol
+ir12 <- irnr12 %>% select(1:6) %>% filter(Symbol %in% ir12Genes) 
+for (i in 1:nrow(ir12)) {
+  x <- data_frame(sym = "", group = "", time = "", avg = 0.0, sd = 0.0, sem = 0.0)
+  x$sym <- ir12$Symbol[i]
+  x$group <- "ir"
+  x$time <- "12"
+  x$avg <- mean(as.numeric(ir12[i,2:6]), na.rm = T)
+  x$sd <- sd(ir12[i,2:6], na.rm = T)
+  x$sem <- x$sd/sqrt(5)
+  master <- rbind(master,x)
+}
+
+#NR12
+nr12Genes <- c("TNFR2", "MBL2", "CCL2", "CX3CL1", "CCL8", "CXCL12", "CD209", "IL12B", 
+               "IL1B", "IL10", "TSG101", "IFNA1", "CDKN1A", "RBL2", "CEBPB", "FOS", "LTBR")
+nr12 <- irnr12 %>% select(c(1,7:11)) %>% filter(Symbol %in% nr12Genes) 
+for (i in 1:nrow(nr12)) {
+  x <- data_frame(sym = "", group = "", time = "", avg = 0.0, sd = 0.0, sem = 0.0)
+  x$sym <- nr12$Symbol[i]
+  x$group <- "nr"
+  x$time <- "12"
+  x$avg <- mean(as.numeric(nr12[i,2:6]), na.rm = T)
+  x$sd <- sd(nr12[i,2:6], na.rm = T)
+  x$sem <- x$sd/sqrt(5)
+  master <- rbind(master,x)
+}
+
+# Make Master group and time into factors
+master$group <- factor(master$group, levels = c("ec", "rp", "ir", "nr"),
+                       labels = c("Elite Controllers", "Rapid Progressors", 
+                                  "Immune Responders", "Immune Non-Responders"))
+master$time <- factor(master$time, levels = c("ri", "12"), labels = c("Recent", "12 Months"))
+
+
+
+```
+
+## Elite Controller Recent Graph
+
+```{r}
+ecri <- master %>% 
+      filter(group == "Elite Controllers" & time == "Recent") %>%
+      select(-c(2:3))
+# make graph showing difference for these ecriGenes genes
+ecrigr <- ggplot(data = ecri, aes(x = sym, y = avg))
+ecrigr <- ecrigr + geom_bar(stat = "identity", fill = "gray")
+ecrigr <- ecrigr + geom_errorbar(aes(ymin = avg - sem, ymax = avg + sem), width = 0.2)
+ecrigr <- ecrigr + xlab("Genes") + ylab("Fold Change")
+ecrigr <- ecrigr + ggtitle("Elite Controllers Recent Infection\nExpression of Significant Genes")
+ecrigr <- ecrigr + guides(fill = FALSE)
+ecrigr <- ecrigr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+ecrigr
+```
+
+## Elite Controller 12 month Graph
+
+```{r}
+ec12 <- master %>% 
+      filter(group == "Elite Controllers" & time == "12 Months") %>%
+      select(-c(2:3))
+# make graph showing difference for these genes
+ec12gr <- ggplot(data = ec12, aes(x = sym, y = avg))
+ec12gr <- ec12gr + geom_bar(stat = "identity", fill = "gray")
+ec12gr <- ec12gr + geom_errorbar(aes(ymin = avg - sem, ymax = avg + sem), width = 0.2)
+ec12gr <- ec12gr + xlab("Genes") + ylab("Fold Change")
+ec12gr <- ec12gr + ggtitle("Elite Controllers 12 Months post Infection\nExpression of Significant Genes")
+ec12gr <- ec12gr + guides(fill = FALSE)
+ec12gr <- ec12gr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+ec12gr
+```
+
+## Rapid Progressor Recent Graph
+
+```{r}
+rpri <- master %>% 
+      filter(group == "Rapid Progressors" & time == "Recent") %>%
+      select(-c(2:3))
+# make graph showing difference for these genes
+rprigr <- ggplot(data = rpri, aes(x = sym, y = avg))
+rprigr <- rprigr + geom_bar(stat = "identity", fill = "gray")
+rprigr <- rprigr + geom_errorbar(aes(ymin = avg - sem, ymax = avg + sem), width = 0.2)
+rprigr <- rprigr + xlab("Genes") + ylab("Fold Change")
+rprigr <- rprigr + ggtitle("Rapid Progressors Recent Infection\nExpression of Significant Genes")
+rprigr <- rprigr + guides(fill = FALSE)
+rprigr <- rprigr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+rprigr
+```
+
+## Rapid Progressor 12 Month Graph
+
+```{r}
+rp12 <- master %>% 
+      filter(group == "Rapid Progressors" & time == "12 Months") %>%
+      select(-c(2:3))
+# make graph showing difference for these genes
+rp12gr <- ggplot(data = rp12, aes(x = sym, y = avg))
+rp12gr <- rp12gr + geom_bar(stat = "identity", fill = "gray")
+rp12gr <- rp12gr + geom_errorbar(aes(ymin = avg - sem, ymax = avg + sem), width = 0.2)
+rp12gr <- rp12gr + xlab("Genes") + ylab("Fold Change")
+rp12gr <- rp12gr + ggtitle("Rapid Progressors 12 Months post Infection\nExpression of Significant Genes")
+rp12gr <- rp12gr + guides(fill = FALSE)
+rp12gr <- rp12gr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+rp12gr
+```
+
+## Immune Responder Recent Graph
+
+```{r}
+irri <- master %>% 
+      filter(group == "Immune Responders" & time == "Recent") %>%
+      select(-c(2:3))
+# make graph showing difference for these genes
+irrigr <- ggplot(data = irri, aes(x = sym, y = avg))
+irrigr <- irrigr + geom_bar(stat = "identity", fill = "gray")
+irrigr <- irrigr + geom_errorbar(aes(ymin = avg - sem, ymax = avg + sem), width = 0.2)
+irrigr <- irrigr + xlab("Genes") + ylab("Fold Change")
+irrigr <- irrigr + ggtitle("Immune Responders Before Treatment\nExpression of Significant Genes")
+irrigr <- irrigr + guides(fill = FALSE)
+irrigr <- irrigr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+irrigr
+```
+
+## Immune Responder 12 Month Graph
+
+```{r}
+ir12 <- master %>% 
+      filter(group == "Immune Responders" & time == "12 Months") %>%
+      select(-c(2:3))
+# make graph showing difference for these genes
+ir12gr <- ggplot(data = ir12, aes(x = sym, y = avg))
+ir12gr <- ir12gr + geom_bar(stat = "identity", fill = "gray", width = 0.5)
+ir12gr <- ir12gr + geom_errorbar(aes(ymin = avg - sem, ymax = avg + sem), width = 0.2)
+ir12gr <- ir12gr + xlab("Genes") + ylab("Fold Change")
+ir12gr <- ir12gr + ggtitle("Immune Responders 12 Months post Infection\nExpression of Significant Genes")
+ir12gr <- ir12gr + guides(fill = FALSE)
+ir12gr <- ir12gr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+ir12gr
+```
+
+## Immune Non-Responder Recent Graph
+
+```{r}
+nrri <- master %>% 
+      filter(group == "Immune Non-Responders" & time == "Recent") %>%
+      select(-c(2:3))
+# make graph showing difference for these genes
+nrrigr <- ggplot(data = nrri, aes(x = sym, y = avg))
+nrrigr <- nrrigr + geom_bar(stat = "identity", fill = "gray")
+nrrigr <- nrrigr + geom_errorbar(aes(ymin = avg - sem, ymax = avg + sem), width = 0.2)
+nrrigr <- nrrigr + xlab("Genes") + ylab("Fold Change")
+nrrigr <- nrrigr + ggtitle("Immune Non-Responders Before Treatment\nExpression of Significant Genes")
+nrrigr <- nrrigr + guides(fill = FALSE)
+nrrigr <- nrrigr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+nrrigr
+```
+
+## Immune Non-Responder 12 Month Graph
+
+```{r}
+nr12 <- master %>% 
+      filter(group == "Immune Non-Responders" & time == "12 Months") %>%
+      select(-c(2:3))
+# make graph showing difference for these genes
+nr12gr <- ggplot(data = nr12, aes(x = sym, y = avg))
+nr12gr <- nr12gr + geom_bar(stat = "identity", fill = "gray", width = 0.5)
+nr12gr <- nr12gr + geom_errorbar(aes(ymin = avg - sem, ymax = avg + sem), width = 0.2)
+nr12gr <- nr12gr + xlab("Genes") + ylab("Fold Change")
+nr12gr <- nr12gr + ggtitle("Immune Non-Responders 12 Months post Infection\nExpression of Significant Genes")
+nr12gr <- nr12gr + guides(fill = FALSE)
+nr12gr <- nr12gr + theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+nr12gr
+```
